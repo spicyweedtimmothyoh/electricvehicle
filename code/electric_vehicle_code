@@ -1,0 +1,146 @@
+
+
+// ==== MOTOR PINS ====
+const int ENA_PIN = 9;
+const int IN1_PIN = 8;
+const int IN2_PIN = 7;
+
+// ==== BUTTON PIN ====
+const int BUTTON_PIN = 11;
+
+// ==== ENCODER PINS ====
+const int ENCODER_A_PIN = 2;
+const int ENCODER_B_PIN = 3;
+
+// ==== WHEEL / ENCODER SETTINGS ====
+const float WHEEL_DIAMETER_M = 0.0730;   // 73 mm wheel
+const int   PULSES_PER_REV   = 603;     // your encoder value
+const float DISTANCE_TARGET_M = 4.0;     // meters
+
+// ==== MOTOR SPEED SETTINGS ====
+// STRONG START
+const int   PWM_KICK         = 255;   // full power at start
+const long  KICK_DURATION_MS = 1000;   // was 300, now longer
+
+// SHORT BOOST AFTER KICK
+const int   PWM_BOOST        = 255;   // stronger than normal run
+const long  BOOST_COUNTS     = 600;   // how many encoder counts to use boost
+
+// NORMAL RUN
+const int   PWM_RUN          = 255;   // normal running speed
+
+// ==== BRAKE / COMPENSATION ====
+// how far BEFORE the real target to start braking
+const float BRAKE_COMP_M = 0.05;  // 5 cm
+
+// ==== RUNTIME VARS ====
+volatile long encoderCount = 0;
+float wheelCircumference = PI * WHEEL_DIAMETER_M;
+bool lastButtonState = HIGH;
+
+
+// ===== Motor helpers =====
+void stopMotorCoast() {
+  analogWrite(ENA_PIN, 0);
+  digitalWrite(IN1_PIN, LOW);
+  digitalWrite(IN2_PIN, LOW);
+}
+
+void stopMotorBrake() {
+  // Strong electric brake
+  digitalWrite(IN1_PIN, HIGH);
+  digitalWrite(IN2_PIN, HIGH);
+  analogWrite(ENA_PIN, 255);
+}
+
+void setMotorForwardPWM(int pwm) {
+  if (pwm < 0)   pwm = 0;
+  if (pwm > 255) pwm = 255;
+  digitalWrite(IN1_PIN, HIGH);
+  digitalWrite(IN2_PIN, LOW);
+  analogWrite(ENA_PIN, pwm);
+}
+
+// ===== Encoder ISR =====
+void encoderISR() {
+  if (digitalRead(ENCODER_B_PIN))
+    encoderCount++;
+  else
+    encoderCount--;
+}
+
+
+void runMotorWithStrongStart(long targetCounts, long brakeStartCounts) {
+  encoderCount = 0;                 // start counting from 0
+  long startCount = encoderCount;
+
+  unsigned long kickStartTime = millis();
+  while ((millis() - kickStartTime) < KICK_DURATION_MS) {
+    setMotorForwardPWM(PWM_KICK);
+  }
+
+  // 2) BOOST PHASE (more torque until a minimum encoder count)
+  long boostEndCount = startCount + BOOST_COUNTS;
+  while (encoderCount < boostEndCount && encoderCount < brakeStartCounts) {
+    setMotorForwardPWM(PWM_BOOST);
+  }
+
+  // 3) MAIN RUN at constant PWM_RUN until brakeStartCounts
+  while (encoderCount < brakeStartCounts) {
+    setMotorForwardPWM(PWM_RUN);
+  }
+
+  // 4) HARD BRAKE near the end
+  stopMotorBrake();
+  delay(150);        // tune: 100–250 ms
+  stopMotorCoast();
+}
+
+
+// ===== SETUP =====
+void setup() {
+  Serial.begin(9600);
+  Serial.println("Distance Drive (STRONGER START + HARD BRAKE) — press button on PIN 11.");
+
+  pinMode(ENA_PIN, OUTPUT);
+  pinMode(IN1_PIN, OUTPUT);
+  pinMode(IN2_PIN, OUTPUT);
+
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  pinMode(ENCODER_A_PIN, INPUT_PULLUP);
+  pinMode(ENCODER_B_PIN, INPUT_PULLUP);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_A_PIN), encoderISR, RISING);
+
+  stopMotorCoast();
+}
+
+
+// ===== MAIN LOOP =====
+void loop() {
+  int buttonState = digitalRead(BUTTON_PIN);
+
+  // Detect button press (HIGH -> LOW)
+  if (lastButtonState == HIGH && buttonState == LOW) {
+    Serial.println("Button pressed → starting movement.");
+
+    encoderCount = 0;
+
+    long targetCounts = (long)((DISTANCE_TARGET_M / wheelCircumference) * PULSES_PER_REV);
+    long brakeStartCounts = (long)(((DISTANCE_TARGET_M - BRAKE_COMP_M) / wheelCircumference) * PULSES_PER_REV);
+    if (brakeStartCounts < 0) brakeStartCounts = 0;
+
+    Serial.print("Target counts:       ");
+    Serial.println(targetCounts);
+    Serial.print("Brake start counts:  ");
+    Serial.println(brakeStartCounts);
+
+    runMotorWithStrongStart(targetCounts, brakeStartCounts);
+
+    Serial.print("Final encoderCount = ");
+    Serial.println(encoderCount);
+    Serial.println("Movement complete.");
+  }
+
+  lastButtonState = buttonState;
+}
