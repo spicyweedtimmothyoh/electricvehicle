@@ -29,4 +29,17 @@ L298N
 
 ## CAD 
 
+![Diagram](https://github.com/spicyweedtimmothyoh/electricvehicle/blob/main/images/Screenshot%202025-11-26%20214451.png)
+![Diagram](https://github.com/spicyweedtimmothyoh/electricvehicle/blob/main/images/Screenshot%202025-11-26%20214516.png)
+![Diagram](https://github.com/spicyweedtimmothyoh/electricvehicle/blob/main/images/Screenshot%202025-11-26%20213931.png)
+
+3D print
+
+![Diagram](https://github.com/spicyweedtimmothyoh/electricvehicle/blob/main/images/Screenshot%202025-11-28%20194546.png)
+
+## Final build
+
+![Diagram](https://github.com/spicyweedtimmothyoh/electricvehicle/blob/main/images/Screenshot%202025-11-28%20194531.png)
+
+
 
